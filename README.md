@@ -599,7 +599,7 @@ Frontend React
 Variáveis usadas nas Functions:
 
 ```env
-MAIL_API_URL=https://armazenamentoarquivos.com.br/api-email/send
+MAIL_API_URL=https://sitequalquer.com.br/api-email/send
 MAIL_API_KEY=
 MAIL_FROM_NAME=Broadcast SaaS
 MAIL_CONFIG_VERSION=2026-05-13-01
@@ -634,7 +634,7 @@ Frontend React
 Endpoint consumido pela Function:
 
 ```txt
-POST https://sistemasphp.com.br/whatsapp-baileys-api/api/internal/whatsapp/send-message
+POST https://sitequalquer.com.br/whatsapp-baileys-api/api/internal/whatsapp/send-message
 ```
 
 Headers esperados pela mini API:
