@@ -876,12 +876,12 @@ functions/.env
 Exemplo sem segredos reais:
 
 ```env
-MAIL_API_URL=https://armazenamentoarquivos.com.br/api-email/send
+MAIL_API_URL=https://sitequalquer.com.br/api-email/send
 MAIL_API_KEY=
 MAIL_FROM_NAME=Broadcast SaaS
 MAIL_CONFIG_VERSION=2026-05-13-01
 
-WHATSAPP_API_URL=https://sistemasphp.com.br/whatsapp-baileys-api/api/internal/whatsapp/send-message
+WHATSAPP_API_URL=https://sitequalquer.com.br/whatsapp-baileys-api/api/internal/whatsapp/send-message
 WHATSAPP_API_TOKEN=troque-este-token
 WHATSAPP_PROVIDER=baileys
 WHATSAPP_CONFIG_VERSION=2026-05-14-01
@@ -1158,7 +1158,7 @@ scheduled_messages_none_due
 ```powershell
 curl.exe -s `
   -H "x-api-token: SEU_TOKEN" `
-  "https://sistemasphp.com.br/whatsapp-baileys-api/api/whatsapp/status"
+  "https://sitequalquer.com.br/whatsapp-baileys-api/api/whatsapp/status"
 ```
 
 Resposta esperada:
