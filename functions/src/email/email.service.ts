@@ -17,6 +17,10 @@ const escapeHtml = (value: string) => {
     .replace(/'/g, "&#039;");
 };
 
+const buildHtmlFromText = (text: string) => {
+  return `<p>${escapeHtml(text).replace(/\n/g, "<br />")}</p>`;
+};
+
 export const sendEmail = async (payload: SendEmailPayload) => {
   if (!env.mailApiUrl) {
     logInfo("mail_api_not_configured");
@@ -29,6 +33,9 @@ export const sendEmail = async (payload: SendEmailPayload) => {
     return { skipped: true };
   }
 
+  const text = payload.text?.trim();
+  const html = payload.html?.trim() || (text ? buildHtmlFromText(text) : "");
+
   const results = await Promise.allSettled(
     recipients.map(async (recipient) => {
       const response = await fetch(env.mailApiUrl, {
@@ -40,19 +47,37 @@ export const sendEmail = async (payload: SendEmailPayload) => {
         body: JSON.stringify({
           to: recipient,
           subject: payload.subject,
-          text: payload.text,
-          html: payload.html,
+          text,
+          html,
           fromName: env.mailFromName,
           ...(env.mailApiKey ? { api_key: env.mailApiKey } : {}),
         }),
       });
 
+      const responseBody = await response.text();
+
       if (!response.ok) {
-        const body = await response.text();
-        throw new Error(`Mail API failed with status ${response.status}: ${body}`);
+        throw new Error(
+          `Mail API failed with status ${response.status}: ${responseBody}`
+        );
       }
 
-      return response.json().catch(() => ({ ok: true }));
+      if (!responseBody) {
+        return { ok: true };
+      }
+
+      const parsedResponse = JSON.parse(responseBody) as {
+        ok?: boolean;
+        error?: string;
+      };
+
+      if (parsedResponse.ok === false) {
+        throw new Error(
+          `Mail API returned error: ${parsedResponse.error ?? "unknown_error"}`
+        );
+      }
+
+      return parsedResponse;
     })
   );
 
@@ -76,12 +101,10 @@ export const sendScheduledMessageEmailCopy = async (input: {
   recipients: string[];
   content: string;
 }) => {
-  const safeContent = escapeHtml(input.content).replace(/\n/g, "<br />");
-
   return sendEmail({
     to: input.recipients,
     subject: "Mensagem Broadcast enviada",
     text: input.content,
-    html: `<p>${safeContent}</p>`,
+    html: buildHtmlFromText(input.content),
   });
 };

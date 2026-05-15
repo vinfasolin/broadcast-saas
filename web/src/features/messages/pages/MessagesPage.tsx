@@ -17,13 +17,22 @@ import {
   subscribeMessages,
   updateMessage,
 } from "../services/messages.service";
-import { sendWhatsappNotification } from "../services/messageNotifications.service";
+import {
+  sendEmailNotification,
+  sendWhatsappNotification,
+} from "../services/messageNotifications.service";
 import type { MessageFormData } from "../schemas/message.schema";
 import type {
   BroadcastMessage,
   MessageInput,
   MessageStatus,
 } from "../types/message.types";
+
+type ImmediateCopyResult = {
+  emailSent: boolean;
+  whatsappSent: boolean;
+  hasFailure: boolean;
+};
 
 export const MessagesPage = () => {
   const { currentUser } = useAuth();
@@ -110,26 +119,94 @@ export const MessagesPage = () => {
     };
   };
 
-  const sendImmediateWhatsappCopy = async (
+  const sendImmediateCopies = async (
     messageId: string,
     payload: MessageInput
-  ) => {
-    if (
-      payload.status !== "sent" ||
-      !payload.sendWhatsappCopy ||
-      !payload.contactPhones ||
-      payload.contactPhones.length === 0
-    ) {
-      return false;
+  ): Promise<ImmediateCopyResult> => {
+    const result: ImmediateCopyResult = {
+      emailSent: false,
+      whatsappSent: false,
+      hasFailure: false,
+    };
+
+    if (payload.status !== "sent") {
+      return result;
     }
 
-    await sendWhatsappNotification({
-      to: payload.contactPhones,
-      text: payload.content,
-      externalId: messageId,
+    const operations: Promise<void>[] = [];
+
+    if (
+      payload.sendEmailCopy &&
+      payload.contactEmails &&
+      payload.contactEmails.length > 0
+    ) {
+      operations.push(
+        sendEmailNotification({
+          to: payload.contactEmails,
+          subject: "Mensagem Broadcast SaaS",
+          text: payload.content,
+        }).then(() => {
+          result.emailSent = true;
+        })
+      );
+    }
+
+    if (
+      payload.sendWhatsappCopy &&
+      payload.contactPhones &&
+      payload.contactPhones.length > 0
+    ) {
+      operations.push(
+        sendWhatsappNotification({
+          to: payload.contactPhones,
+          text: payload.content,
+          externalId: messageId,
+        }).then(() => {
+          result.whatsappSent = true;
+        })
+      );
+    }
+
+    if (operations.length === 0) {
+      return result;
+    }
+
+    const settledResults = await Promise.allSettled(operations);
+
+    result.hasFailure = settledResults.some(
+      (settledResult) => settledResult.status === "rejected"
+    );
+
+    settledResults.forEach((settledResult) => {
+      if (settledResult.status === "rejected") {
+        console.error(settledResult.reason);
+      }
     });
 
-    return true;
+    return result;
+  };
+
+  const getSaveFeedbackMessage = (
+    action: "criada" | "atualizada",
+    result: ImmediateCopyResult
+  ) => {
+    if (result.hasFailure) {
+      return `Mensagem ${action}, mas uma ou mais cópias não foram enviadas agora.`;
+    }
+
+    if (result.emailSent && result.whatsappSent) {
+      return `Mensagem ${action} e enviada por e-mail e WhatsApp.`;
+    }
+
+    if (result.emailSent) {
+      return `Mensagem ${action} e enviada por e-mail.`;
+    }
+
+    if (result.whatsappSent) {
+      return `Mensagem ${action} e enviada pelo WhatsApp.`;
+    }
+
+    return `Mensagem ${action}.`;
   };
 
   const handleSubmit = async (data: MessageFormData) => {
@@ -145,47 +222,21 @@ export const MessagesPage = () => {
       if (selectedMessage) {
         await updateMessage(selectedMessage.id, payload);
 
-        try {
-          const wasWhatsappSent = await sendImmediateWhatsappCopy(
-            selectedMessage.id,
-            payload
-          );
+        const result = await sendImmediateCopies(selectedMessage.id, payload);
 
-          showSnackbar(
-            wasWhatsappSent
-              ? "Mensagem atualizada e enviada pelo WhatsApp."
-              : "Mensagem atualizada.",
-            "success"
-          );
-        } catch (error) {
-          console.error(error);
-          showSnackbar(
-            "Mensagem atualizada, mas não foi possível enviar pelo WhatsApp agora.",
-            "warning"
-          );
-        }
+        showSnackbar(
+          getSaveFeedbackMessage("atualizada", result),
+          result.hasFailure ? "warning" : "success"
+        );
       } else {
         const messageId = await createMessage(currentUser.uid, payload);
 
-        try {
-          const wasWhatsappSent = await sendImmediateWhatsappCopy(
-            messageId,
-            payload
-          );
+        const result = await sendImmediateCopies(messageId, payload);
 
-          showSnackbar(
-            wasWhatsappSent
-              ? "Mensagem criada e enviada pelo WhatsApp."
-              : "Mensagem criada.",
-            "success"
-          );
-        } catch (error) {
-          console.error(error);
-          showSnackbar(
-            "Mensagem criada, mas não foi possível enviar pelo WhatsApp agora.",
-            "warning"
-          );
-        }
+        showSnackbar(
+          getSaveFeedbackMessage("criada", result),
+          result.hasFailure ? "warning" : "success"
+        );
       }
 
       setDialogOpen(false);

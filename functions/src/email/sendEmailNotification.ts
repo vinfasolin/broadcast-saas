@@ -23,13 +23,13 @@ export const sendEmailNotification = onCall(
   },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "UsuÃ¡rio nÃ£o autenticado.");
+      throw new HttpsError("unauthenticated", "Usuário não autenticado.");
     }
 
     const parsed = schema.safeParse(request.data);
 
     if (!parsed.success) {
-      throw new HttpsError("invalid-argument", "Dados de e-mail invÃ¡lidos.");
+      throw new HttpsError("invalid-argument", "Dados de e-mail inválidos.");
     }
 
     await sendEmail(parsed.data);
