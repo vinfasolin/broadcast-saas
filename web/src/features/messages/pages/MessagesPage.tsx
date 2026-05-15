@@ -18,7 +18,7 @@ import {
   updateMessage,
 } from "../services/messages.service";
 import { sendWhatsappNotification } from "../services/messageNotifications.service";
-import type { MessageFormData } from "../schemas/message.schema"; 
+import type { MessageFormData } from "../schemas/message.schema";
 import type {
   BroadcastMessage,
   MessageInput,
@@ -34,8 +34,11 @@ export const MessagesPage = () => {
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
   const [statusFilter, setStatusFilter] = useState<MessageStatus | "">("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedMessage, setSelectedMessage] = useState<BroadcastMessage | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<BroadcastMessage | null>(null);
+  const [selectedMessage, setSelectedMessage] =
+    useState<BroadcastMessage | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BroadcastMessage | null>(
+    null
+  );
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -117,7 +120,7 @@ export const MessagesPage = () => {
       !payload.contactPhones ||
       payload.contactPhones.length === 0
     ) {
-      return;
+      return false;
     }
 
     await sendWhatsappNotification({
@@ -125,6 +128,8 @@ export const MessagesPage = () => {
       text: payload.content,
       externalId: messageId,
     });
+
+    return true;
   };
 
   const handleSubmit = async (data: MessageFormData) => {
@@ -139,15 +144,37 @@ export const MessagesPage = () => {
 
       if (selectedMessage) {
         await updateMessage(selectedMessage.id, payload);
-        showSnackbar("Mensagem atualizada.", "success");
+
+        try {
+          const wasWhatsappSent = await sendImmediateWhatsappCopy(
+            selectedMessage.id,
+            payload
+          );
+
+          showSnackbar(
+            wasWhatsappSent
+              ? "Mensagem atualizada e enviada pelo WhatsApp."
+              : "Mensagem atualizada.",
+            "success"
+          );
+        } catch (error) {
+          console.error(error);
+          showSnackbar(
+            "Mensagem atualizada, mas não foi possível enviar pelo WhatsApp agora.",
+            "warning"
+          );
+        }
       } else {
         const messageId = await createMessage(currentUser.uid, payload);
 
         try {
-          await sendImmediateWhatsappCopy(messageId, payload);
+          const wasWhatsappSent = await sendImmediateWhatsappCopy(
+            messageId,
+            payload
+          );
 
           showSnackbar(
-            payload.status === "sent" && payload.sendWhatsappCopy
+            wasWhatsappSent
               ? "Mensagem criada e enviada pelo WhatsApp."
               : "Mensagem criada.",
             "success"
