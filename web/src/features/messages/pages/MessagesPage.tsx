@@ -34,6 +34,19 @@ type ImmediateCopyResult = {
   hasFailure: boolean;
 };
 
+const escapeHtml = (value: string) => {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+const buildEmailHtml = (content: string) => {
+  return `<p>${escapeHtml(content).replace(/\n/g, "<br />")}</p>`;
+};
+
 export const MessagesPage = () => {
   const { currentUser } = useAuth();
   const { showSnackbar } = useSnackbar();
@@ -129,7 +142,17 @@ export const MessagesPage = () => {
       hasFailure: false,
     };
 
+    console.info("[MessagesPage] immediate copy payload", {
+      messageId,
+      status: payload.status,
+      sendEmailCopy: payload.sendEmailCopy,
+      contactEmails: payload.contactEmails,
+      sendWhatsappCopy: payload.sendWhatsappCopy,
+      contactPhones: payload.contactPhones,
+    });
+
     if (payload.status !== "sent") {
+      console.info("[MessagesPage] immediate copy skipped: status is not sent");
       return result;
     }
 
@@ -140,15 +163,30 @@ export const MessagesPage = () => {
       payload.contactEmails &&
       payload.contactEmails.length > 0
     ) {
+      console.info("[MessagesPage] sending immediate email copy", {
+        messageId,
+        recipients: payload.contactEmails,
+      });
+
       operations.push(
         sendEmailNotification({
           to: payload.contactEmails,
           subject: "Mensagem Broadcast SaaS",
           text: payload.content,
+          html: buildEmailHtml(payload.content),
         }).then(() => {
           result.emailSent = true;
+          console.info("[MessagesPage] immediate email copy sent", {
+            messageId,
+          });
         })
       );
+    } else {
+      console.info("[MessagesPage] immediate email copy skipped", {
+        messageId,
+        sendEmailCopy: payload.sendEmailCopy,
+        contactEmails: payload.contactEmails,
+      });
     }
 
     if (
@@ -156,6 +194,11 @@ export const MessagesPage = () => {
       payload.contactPhones &&
       payload.contactPhones.length > 0
     ) {
+      console.info("[MessagesPage] sending immediate WhatsApp copy", {
+        messageId,
+        recipients: payload.contactPhones,
+      });
+
       operations.push(
         sendWhatsappNotification({
           to: payload.contactPhones,
@@ -163,11 +206,23 @@ export const MessagesPage = () => {
           externalId: messageId,
         }).then(() => {
           result.whatsappSent = true;
+          console.info("[MessagesPage] immediate WhatsApp copy sent", {
+            messageId,
+          });
         })
       );
+    } else {
+      console.info("[MessagesPage] immediate WhatsApp copy skipped", {
+        messageId,
+        sendWhatsappCopy: payload.sendWhatsappCopy,
+        contactPhones: payload.contactPhones,
+      });
     }
 
     if (operations.length === 0) {
+      console.info("[MessagesPage] no immediate copy operation to run", {
+        messageId,
+      });
       return result;
     }
 
@@ -179,8 +234,16 @@ export const MessagesPage = () => {
 
     settledResults.forEach((settledResult) => {
       if (settledResult.status === "rejected") {
-        console.error(settledResult.reason);
+        console.error("[MessagesPage] immediate copy failed", {
+          messageId,
+          reason: settledResult.reason,
+        });
       }
+    });
+
+    console.info("[MessagesPage] immediate copy result", {
+      messageId,
+      result,
     });
 
     return result;
@@ -219,6 +282,15 @@ export const MessagesPage = () => {
     try {
       const payload = withContactChannels(data);
 
+      console.info("[MessagesPage] saving message", {
+        selectedMessageId: selectedMessage?.id ?? null,
+        status: payload.status,
+        sendEmailCopy: payload.sendEmailCopy,
+        contactEmails: payload.contactEmails,
+        sendWhatsappCopy: payload.sendWhatsappCopy,
+        contactPhones: payload.contactPhones,
+      });
+
       if (selectedMessage) {
         await updateMessage(selectedMessage.id, payload);
 
@@ -242,7 +314,7 @@ export const MessagesPage = () => {
       setDialogOpen(false);
       setSelectedMessage(null);
     } catch (error) {
-      console.error(error);
+      console.error("[MessagesPage] save message failed", error);
       showSnackbar("Não foi possível salvar a mensagem.", "error");
     } finally {
       setLoading(false);
